@@ -151,15 +151,8 @@ def share_click(state0, state1, model_selector0, model_selector1, request: gr.Re
         )
 
 
-# def add_text(state0, state1, model_selector0, model_selector1, text, image, request: gr.Request):
-#     start_time = time.time()
-#     result = add_text_1(state0, state1, model_selector0, model_selector1, text, image, request)
-#     run_time = time.time() - start_time
-#     return result
-
-
 def add_text(
-    state0, state1, model_selector0, model_selector1, text, request: gr.Request
+        state0, state1, model_selector0, model_selector1, text, request: gr.Request
 ):
     m = {"CPU": "vicuna-7b-v1.5", "GPU": "vicuna-7b-v1.5-GTX4090"}
     model_selector0 = m[model_selector0]
@@ -205,13 +198,13 @@ def add_text(
         for i in range(num_sides):
             states[i].skip_next = True
         return (
-            states
-            + [x.to_gradio_chatbot() for x in states]
-            + [CONVERSATION_LIMIT_MSG]
-            + [
-                no_change_btn,
-            ]
-            * 6
+                states
+                + [x.to_gradio_chatbot() for x in states]
+                + [CONVERSATION_LIMIT_MSG]
+                + [
+                    no_change_btn,
+                ]
+                * 6
         )
 
     text = text[:INPUT_CHAR_LEN_LIMIT]  # Hard cut-off
@@ -221,13 +214,13 @@ def add_text(
         states[i].skip_next = False
 
     return (
-        states
-        + [x.to_gradio_chatbot() for x in states]
-        + [""]
-        + [
-            disable_btn,
-        ]
-        * 6
+            states
+            + [x.to_gradio_chatbot() for x in states]
+            + [""]
+            + [
+                disable_btn,
+            ]
+            * 6
     )
 
 
@@ -388,12 +381,6 @@ front-end users.
                         show_label=False,
                         container=False,
                     )
-        # with gr.Row():
-        #     with gr.Accordion(
-        #         f"🔍 Expand to see the descriptions of {len(models)} models", open=False
-        #     ):
-        #         model_description_md = get_model_description_md(models)
-        #         gr.Markdown(model_description_md, elem_id="model_description_markdown")
 
         with gr.Row():
             for i in range(num_sides):
@@ -416,23 +403,11 @@ front-end users.
                 with gr.Column():
                     points[i] = gr.Textbox(label="Inference result similarity points", visible=(i == 1),
                                            info="A Sbert-based "
-                                                "similarity analysis is provided (-11, 11). The closer the"
-                                                "value is to 11, the more relevant it is.")
+                                                "similarity analysis is provided (-1, 1). The closer the"
+                                                "value is to 1, the more relevant it is.")
 
         with gr.Column():
             gpt = gr.Textbox(label="GPT4-Score", info="Based on GPT")
-
-    # with gr.Row():
-    #     leftvote_btn = gr.Button(
-    #         value="👈  A is better", visible=False, interactive=False
-    #     )
-    #     rightvote_btn = gr.Button(
-    #         value="👉  B is better", visible=False, interactive=False
-    #     )
-    #     tie_btn = gr.Button(value="🤝  Tie", visible=False, interactive=False)
-    #     bothbad_btn = gr.Button(
-    #         value="👎  Both are bad", visible=False, interactive=False
-    #     )
 
     with gr.Row():
         textbox = gr.Textbox(
@@ -473,37 +448,11 @@ front-end users.
             label="Max output tokens",
         )
 
-    # gr.Markdown(acknowledgment_md, elem_id="ack_markdown")
-
     # Register listeners
     btn_list = [
-        # leftvote_btn,
-        # rightvote_btn,
-        # tie_btn,
-        # bothbad_btn,
         regenerate_btn,
         clear_btn,
     ]
-    # leftvote_btn.click(
-    #     leftvote_last_response,
-    #     states + model_selectors,
-    #     [textbox, leftvote_btn, rightvote_btn, tie_btn, bothbad_btn],
-    # )
-    # rightvote_btn.click(
-    #     rightvote_last_response,
-    #     states + model_selectors,
-    #     [textbox, leftvote_btn, rightvote_btn, tie_btn, bothbad_btn],
-    # )
-    # tie_btn.click(
-    #     tievote_last_response,
-    #     states + model_selectors,
-    #     [textbox, leftvote_btn, rightvote_btn, tie_btn, bothbad_btn],
-    # )
-    # bothbad_btn.click(
-    #     bothbad_vote_last_response,
-    #     states + model_selectors,
-    #     [textbox, leftvote_btn, rightvote_btn, tie_btn, bothbad_btn],
-    # )
     regenerate_btn.click(
         regenerate, states, states + chatbots + [textbox] + btn_list
     ).then(
