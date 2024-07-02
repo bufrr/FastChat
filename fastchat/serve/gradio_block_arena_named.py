@@ -5,6 +5,7 @@ Users chat with two chosen models.
 
 import json
 import time
+import requests
 
 import gradio as gr
 import numpy as np
@@ -78,7 +79,7 @@ def vote_last_response(states, vote_type, model_selectors, request: gr.Request):
 
 
 def leftvote_last_response(
-    state0, state1, model_selector0, model_selector1, request: gr.Request
+        state0, state1, model_selector0, model_selector1, request: gr.Request
 ):
     logger.info(f"leftvote (named). ip: {get_ip(request)}")
     vote_last_response(
@@ -88,7 +89,7 @@ def leftvote_last_response(
 
 
 def rightvote_last_response(
-    state0, state1, model_selector0, model_selector1, request: gr.Request
+        state0, state1, model_selector0, model_selector1, request: gr.Request
 ):
     logger.info(f"rightvote (named). ip: {get_ip(request)}")
     vote_last_response(
@@ -98,7 +99,7 @@ def rightvote_last_response(
 
 
 def tievote_last_response(
-    state0, state1, model_selector0, model_selector1, request: gr.Request
+        state0, state1, model_selector0, model_selector1, request: gr.Request
 ):
     logger.info(f"tievote (named). ip: {get_ip(request)}")
     vote_last_response(
@@ -108,7 +109,7 @@ def tievote_last_response(
 
 
 def bothbad_vote_last_response(
-    state0, state1, model_selector0, model_selector1, request: gr.Request
+        state0, state1, model_selector0, model_selector1, request: gr.Request
 ):
     logger.info(f"bothbad_vote (named). ip: {get_ip(request)}")
     vote_last_response(
@@ -124,7 +125,7 @@ def regenerate(state0, state1, request: gr.Request):
         for i in range(num_sides):
             states[i].conv.update_last_message(None)
         return (
-            states + [x.to_gradio_chatbot() for x in states] + [""] + [disable_btn] * 6
+                states + [x.to_gradio_chatbot() for x in states] + [""] + [disable_btn] * 6
         )
     states[0].skip_next = True
     states[1].skip_next = True
@@ -134,11 +135,11 @@ def regenerate(state0, state1, request: gr.Request):
 def clear_history(request: gr.Request):
     logger.info(f"clear_history (named). ip: {get_ip(request)}")
     return (
-        [None] * num_sides
-        + [None] * num_sides
-        + [""]
-        + [invisible_btn] * 4
-        + [disable_btn] * 2
+            [None] * num_sides
+            + [None] * num_sides
+            + [""]
+            + [invisible_btn] * 4
+            + [disable_btn] * 2
     )
 
 
@@ -150,9 +151,19 @@ def share_click(state0, state1, model_selector0, model_selector1, request: gr.Re
         )
 
 
+# def add_text(state0, state1, model_selector0, model_selector1, text, image, request: gr.Request):
+#     start_time = time.time()
+#     result = add_text_1(state0, state1, model_selector0, model_selector1, text, image, request)
+#     run_time = time.time() - start_time
+#     return result
+
+
 def add_text(
     state0, state1, model_selector0, model_selector1, text, request: gr.Request
 ):
+    m = {"CPU": "vicuna-7b-v1.5", "GPU": "vicuna-7b-v1.5-GTX4090"}
+    model_selector0 = m[model_selector0]
+    model_selector1 = m[model_selector1]
     ip = get_ip(request)
     logger.info(f"add_text (named). ip: {ip}. len: {len(text)}")
     states = [state0, state1]
@@ -167,20 +178,20 @@ def add_text(
         for i in range(num_sides):
             states[i].skip_next = True
         return (
-            states
-            + [x.to_gradio_chatbot() for x in states]
-            + ["", None]
-            + [
-                no_change_btn,
-            ]
-            * 6
+                states
+                + [x.to_gradio_chatbot() for x in states]
+                + ["", None]
+                + [
+                    no_change_btn,
+                ]
+                * 6
         )
 
     model_list = [states[i].model_name for i in range(num_sides)]
     all_conv_text_left = states[0].conv.get_prompt()
     all_conv_text_right = states[1].conv.get_prompt()
     all_conv_text = (
-        all_conv_text_left[-1000:] + all_conv_text_right[-1000:] + "\nuser: " + text
+            all_conv_text_left[-1000:] + all_conv_text_right[-1000:] + "\nuser: " + text
     )
     flagged = moderation_filter(all_conv_text, model_list)
     if flagged:
@@ -221,14 +232,18 @@ def add_text(
 
 
 def bot_response_multi(
-    state0,
-    state1,
-    temperature,
-    top_p,
-    max_new_tokens,
-    request: gr.Request,
+        state0,
+        state1,
+        temperature,
+        top_p,
+        max_new_tokens,
+        request: gr.Request,
+        progress=gr.Progress(),
 ):
     logger.info(f"bot_response_multi (named). ip: {get_ip(request)}")
+
+    progress(0, desc="Starting")
+    progress(0.05)
 
     if state0.skip_next:
         # This generate call is skipped due to invalid inputs
@@ -277,11 +292,21 @@ def bot_response_multi(
         model_tpy.append(token_per_yield)
 
     chatbots = [None] * num_sides
+    scores = [None] * num_sides
+    points = [None] * num_sides
+    score_data = [None] * num_sides
+    point_data = [None] * num_sides
+    gpt = None
     iters = 0
     while True:
+        if iters <= 10:
+            progress(0.1 * iters, desc="Generating")
         stop = True
         iters += 1
         for i in range(num_sides):
+            if "GTX" not in states[i].model_name and iters % 3 != 1:
+                stop = False
+                continue
             try:
                 # yield fewer times if chunk size is larger
                 if model_tpy[i] == 1 or (iters % model_tpy[i] == 1 or iters < 3):
@@ -289,9 +314,22 @@ def bot_response_multi(
                     states[i], chatbots[i] = ret[0], ret[1]
                 stop = False
             except StopIteration:
-                pass
-        yield states + chatbots + [disable_btn] * 6
+                score_data[i] = chatbots[i][0]
+                point_data[i] = chatbots[i][0][1]
+        yield states + chatbots + scores + points + [gpt] + [disable_btn] * 6
         if stop:
+            r = requests.post("http://45.32.109.227:5000/score", json=score_data)
+            j = r.json()
+            for i in range(num_sides):
+                scores[i] = j[i]['score']
+            r = requests.post("http://45.32.109.227:5000/similarity", json=point_data)
+            j = r.json()
+            points = [x[0] for x in j]
+            r = requests.post("http://45.32.109.227:5000/gpt4_score", json=score_data)
+            j = r.json()
+            gpt = j["scores"]
+            print(gpt)
+            yield states + chatbots + scores + points + [gpt] + [disable_btn] * 6
             break
 
 
@@ -307,63 +345,94 @@ def flash_buttons():
 
 def build_side_by_side_ui_named(models):
     notice_markdown = """
-# ⚔️  LMSYS Chatbot Arena: Benchmarking LLMs in the Wild
-[Blog](https://lmsys.org/blog/2023-05-03-arena/) | [GitHub](https://github.com/lm-sys/FastChat) | [Paper](https://arxiv.org/abs/2403.04132) | [Dataset](https://github.com/lm-sys/FastChat/blob/main/docs/dataset_release.md) | [Twitter](https://twitter.com/lmsysorg) | [Discord](https://discord.gg/HSWAKCrnFx) | [Kaggle Competition](https://www.kaggle.com/competitions/lmsys-chatbot-arena)
+# ⚔️  AOS-Playground: A front-end AI project framework built on gardio
 
+- AOS-Playground is convenient for AI developers to test the comparison of node inference performance of different 
+frameworks. 
+- Support worker (GPU & CPU) node registration, run gguf format models, respond to inference requests from 
+front-end users.
 
-## 📜 Rules
-- Ask any question to two chosen models (e.g., ChatGPT, Gemini, Claude, Llama) and vote for the better one!
-- You can chat for multiple turns until you identify a winner.
-
-## 👇 Choose two models to compare
+## 🤖 Choose models to compare
 """
 
     states = [gr.State() for _ in range(num_sides)]
     model_selectors = [None] * num_sides
     chatbots = [None] * num_sides
+    scores = [None] * num_sides
+    points = [None] * num_sides
+    gpt = None
 
     notice = gr.Markdown(notice_markdown, elem_id="notice_markdown")
+
+    llms = []
+    for m in models:
+        if m.split("-")[0] not in llms:
+            llms.append(m.split("-")[0])
+
+    with gr.Column():
+        gr.Dropdown(
+            label="Models",
+            choices=llms,
+        )
+
+    mm = ["CPU", "GPU"]
 
     with gr.Group(elem_id="share-region-named"):
         with gr.Row():
             for i in range(num_sides):
                 with gr.Column():
-                    model_selectors[i] = gr.Dropdown(
-                        choices=models,
-                        value=models[i] if len(models) > i else "",
+                    model_selectors[i] = gr.Radio(
+                        choices=mm,
+                        value=models[i],
                         interactive=True,
                         show_label=False,
                         container=False,
                     )
-        with gr.Row():
-            with gr.Accordion(
-                f"🔍 Expand to see the descriptions of {len(models)} models", open=False
-            ):
-                model_description_md = get_model_description_md(models)
-                gr.Markdown(model_description_md, elem_id="model_description_markdown")
+        # with gr.Row():
+        #     with gr.Accordion(
+        #         f"🔍 Expand to see the descriptions of {len(models)} models", open=False
+        #     ):
+        #         model_description_md = get_model_description_md(models)
+        #         gr.Markdown(model_description_md, elem_id="model_description_markdown")
 
         with gr.Row():
             for i in range(num_sides):
-                label = "Model A" if i == 0 else "Model B"
+                # label = "Model A" if i == 0 else "Model B"
                 with gr.Column():
                     chatbots[i] = gr.Chatbot(
-                        label=label,
+                        # label=label,
                         elem_id=f"chatbot",
                         height=650,
                         show_copy_button=True,
                     )
 
-    with gr.Row():
-        leftvote_btn = gr.Button(
-            value="👈  A is better", visible=False, interactive=False
-        )
-        rightvote_btn = gr.Button(
-            value="👉  B is better", visible=False, interactive=False
-        )
-        tie_btn = gr.Button(value="🤝  Tie", visible=False, interactive=False)
-        bothbad_btn = gr.Button(
-            value="👎  Both are bad", visible=False, interactive=False
-        )
+        with gr.Row():
+            for i in range(num_sides):
+                with gr.Column():
+                    scores[i] = gr.Textbox(label="Inference Quality Score", info="Based on sbert")
+
+        with gr.Row():
+            for i in range(num_sides):
+                with gr.Column():
+                    points[i] = gr.Textbox(label="Inference result similarity points", visible=(i == 1),
+                                           info="A Sbert-based "
+                                                "similarity analysis is provided (-11, 11). The closer the"
+                                                "value is to 11, the more relevant it is.")
+
+        with gr.Column():
+            gpt = gr.Textbox(label="GPT4-Score", info="Based on GPT")
+
+    # with gr.Row():
+    #     leftvote_btn = gr.Button(
+    #         value="👈  A is better", visible=False, interactive=False
+    #     )
+    #     rightvote_btn = gr.Button(
+    #         value="👉  B is better", visible=False, interactive=False
+    #     )
+    #     tie_btn = gr.Button(value="🤝  Tie", visible=False, interactive=False)
+    #     bothbad_btn = gr.Button(
+    #         value="👎  Both are bad", visible=False, interactive=False
+    #     )
 
     with gr.Row():
         textbox = gr.Textbox(
@@ -404,37 +473,37 @@ def build_side_by_side_ui_named(models):
             label="Max output tokens",
         )
 
-    gr.Markdown(acknowledgment_md, elem_id="ack_markdown")
+    # gr.Markdown(acknowledgment_md, elem_id="ack_markdown")
 
     # Register listeners
     btn_list = [
-        leftvote_btn,
-        rightvote_btn,
-        tie_btn,
-        bothbad_btn,
+        # leftvote_btn,
+        # rightvote_btn,
+        # tie_btn,
+        # bothbad_btn,
         regenerate_btn,
         clear_btn,
     ]
-    leftvote_btn.click(
-        leftvote_last_response,
-        states + model_selectors,
-        [textbox, leftvote_btn, rightvote_btn, tie_btn, bothbad_btn],
-    )
-    rightvote_btn.click(
-        rightvote_last_response,
-        states + model_selectors,
-        [textbox, leftvote_btn, rightvote_btn, tie_btn, bothbad_btn],
-    )
-    tie_btn.click(
-        tievote_last_response,
-        states + model_selectors,
-        [textbox, leftvote_btn, rightvote_btn, tie_btn, bothbad_btn],
-    )
-    bothbad_btn.click(
-        bothbad_vote_last_response,
-        states + model_selectors,
-        [textbox, leftvote_btn, rightvote_btn, tie_btn, bothbad_btn],
-    )
+    # leftvote_btn.click(
+    #     leftvote_last_response,
+    #     states + model_selectors,
+    #     [textbox, leftvote_btn, rightvote_btn, tie_btn, bothbad_btn],
+    # )
+    # rightvote_btn.click(
+    #     rightvote_last_response,
+    #     states + model_selectors,
+    #     [textbox, leftvote_btn, rightvote_btn, tie_btn, bothbad_btn],
+    # )
+    # tie_btn.click(
+    #     tievote_last_response,
+    #     states + model_selectors,
+    #     [textbox, leftvote_btn, rightvote_btn, tie_btn, bothbad_btn],
+    # )
+    # bothbad_btn.click(
+    #     bothbad_vote_last_response,
+    #     states + model_selectors,
+    #     [textbox, leftvote_btn, rightvote_btn, tie_btn, bothbad_btn],
+    # )
     regenerate_btn.click(
         regenerate, states, states + chatbots + [textbox] + btn_list
     ).then(
@@ -480,9 +549,11 @@ function (a, b, c, d) {
     ).then(
         bot_response_multi,
         states + [temperature, top_p, max_output_tokens],
-        states + chatbots + btn_list,
+        states + chatbots + scores + points + [gpt] + btn_list,
     ).then(
         flash_buttons, [], btn_list
+    ).then(
+
     )
     send_btn.click(
         add_text,
@@ -491,7 +562,7 @@ function (a, b, c, d) {
     ).then(
         bot_response_multi,
         states + [temperature, top_p, max_output_tokens],
-        states + chatbots + btn_list,
+        states + chatbots + scores + points + [gpt] + btn_list,
     ).then(
         flash_buttons, [], btn_list
     )

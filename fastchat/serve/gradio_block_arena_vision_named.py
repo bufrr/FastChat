@@ -366,7 +366,7 @@ def build_side_by_side_vision_ui_named(models, random_questions=None):
             label="Max output tokens",
         )
 
-    gr.Markdown(acknowledgment_md, elem_id="ack_markdown")
+    #gr.Markdown(acknowledgment_md, elem_id="ack_markdown")
 
     # Register listeners
     btn_list = [
