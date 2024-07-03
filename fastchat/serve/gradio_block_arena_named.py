@@ -346,6 +346,16 @@ frameworks.
 - Support worker (GPU & CPU) node registration, run gguf format models, respond to inference requests from 
 front-end users.
 
+- *Sbert*: Sbert is a Python library that supports calculating similarity scores for pairs of texts and predicting 
+scores for pairs of sentences. 
+    * Similarity score: The value range is between -1 and 1. The closer the value is to 1, 
+the more similar the results are. 
+    * Predict score: The value range is between -11 and 11. The closer the value is to 
+11, the better the result. A higher value means the inference quality is better. 
+    * GPT4 score: The value range is 
+between 0 and 10. The closer the value is to 10, the  better the result. A higher value means the inference quality 
+is better.
+
 ## 🤖 Choose models to compare
 """
 
