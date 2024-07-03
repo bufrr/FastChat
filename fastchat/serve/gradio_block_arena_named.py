@@ -152,20 +152,16 @@ def share_click(state0, state1, model_selector0, model_selector1, request: gr.Re
 
 
 def add_text(
-        state0, state1, model_selector0, model_selector1, text, request: gr.Request
+        state0, state1, text, request: gr.Request
 ):
-    m = {"CPU": "vicuna-7b-v1.5", "GPU": "vicuna-7b-v1.5-GTX4090"}
-    model_selector0 = m[model_selector0]
-    model_selector1 = m[model_selector1]
+    m = ["vicuna-7b-v1.5", "vicuna-7b-v1.5-GTX4090"]
     ip = get_ip(request)
     logger.info(f"add_text (named). ip: {ip}. len: {len(text)}")
     states = [state0, state1]
-    model_selectors = [model_selector0, model_selector1]
 
     # Init states if necessary
     for i in range(num_sides):
-        if states[i] is None:
-            states[i] = State(model_selectors[i])
+        states[i] = State(m[i])
 
     if len(text) <= 0:
         for i in range(num_sides):
@@ -290,6 +286,8 @@ def bot_response_multi(
     score_data = [None] * num_sides
     point_data = [None] * num_sides
     gpt = None
+    durations = [0] * num_sides
+
     iters = 0
     while True:
         if iters <= 10:
@@ -303,7 +301,10 @@ def bot_response_multi(
             try:
                 # yield fewer times if chunk size is larger
                 if model_tpy[i] == 1 or (iters % model_tpy[i] == 1 or iters < 3):
+                    start = time.time()
                     ret = next(gen[i])
+                    end = time.time()
+                    durations[i] += (end - start)
                     states[i], chatbots[i] = ret[0], ret[1]
                 stop = False
             except StopIteration:
@@ -322,7 +323,7 @@ def bot_response_multi(
             j = r.json()
             gpt = j["scores"]
             print(gpt)
-            yield states + chatbots + scores + points + [gpt] + [disable_btn] * 6
+            yield states + chatbots + scores + points + durations + [gpt] + [disable_btn] * 6
             break
 
 
@@ -349,10 +350,11 @@ front-end users.
 """
 
     states = [gr.State() for _ in range(num_sides)]
-    model_selectors = [None] * num_sides
+    # model_selectors = [None] * num_sides
     chatbots = [None] * num_sides
     scores = [None] * num_sides
     points = [None] * num_sides
+    durations = [None] * num_sides
     gpt = None
 
     notice = gr.Markdown(notice_markdown, elem_id="notice_markdown")
@@ -374,20 +376,14 @@ front-end users.
         with gr.Row():
             for i in range(num_sides):
                 with gr.Column():
-                    model_selectors[i] = gr.Radio(
-                        choices=mm,
-                        value=models[i],
-                        interactive=True,
-                        show_label=False,
-                        container=False,
-                    )
+                    durations[i] = gr.Textbox(label="Inference Time (s)")
 
         with gr.Row():
             for i in range(num_sides):
                 # label = "Model A" if i == 0 else "Model B"
                 with gr.Column():
                     chatbots[i] = gr.Chatbot(
-                        # label=label,
+                        label=mm[i],
                         elem_id=f"chatbot",
                         height=650,
                         show_copy_button=True,
@@ -484,21 +480,21 @@ function (a, b, c, d) {
     return [a, b, c, d];
 }
 """
-    share_btn.click(share_click, states + model_selectors, [], js=share_js)
+    share_btn.click(share_click, states, [], js=share_js)
 
-    for i in range(num_sides):
-        model_selectors[i].change(
-            clear_history, None, states + chatbots + [textbox] + btn_list
-        )
+    # for i in range(num_sides):
+    #     model_selectors[i].change(
+    #         clear_history, None, states + chatbots + [textbox] + btn_list
+    #     )
 
     textbox.submit(
         add_text,
-        states + model_selectors + [textbox],
+        states + [textbox],
         states + chatbots + [textbox] + btn_list,
     ).then(
         bot_response_multi,
         states + [temperature, top_p, max_output_tokens],
-        states + chatbots + scores + points + [gpt] + btn_list,
+        states + chatbots + scores + points + durations + [gpt] + btn_list,
     ).then(
         flash_buttons, [], btn_list
     ).then(
@@ -506,14 +502,14 @@ function (a, b, c, d) {
     )
     send_btn.click(
         add_text,
-        states + model_selectors + [textbox],
+        states + [textbox],
         states + chatbots + [textbox] + btn_list,
     ).then(
         bot_response_multi,
         states + [temperature, top_p, max_output_tokens],
-        states + chatbots + scores + points + [gpt] + btn_list,
+        states + chatbots + scores + points + durations + [gpt] + btn_list,
     ).then(
         flash_buttons, [], btn_list
     )
 
-    return states + model_selectors
+    return states
